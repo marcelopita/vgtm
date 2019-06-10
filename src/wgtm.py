@@ -193,8 +193,11 @@ def main(argv = None):
     for d in corpus:
         pzd = [0.001] * k
         for w in d.split():
-            wtopic = word_topics[w]
-            pzd[wtopic] += 1
+            try:
+                wtopic = word_topics[w]
+                pzd[wtopic] += 1
+            except:
+                print("Erro: " + w)
         sum_vals = sum(pzd)
         pzd[0] /= sum_vals
         pzd_file.write('{:.6f}'.format(pzd[0]))
