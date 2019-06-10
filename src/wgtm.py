@@ -8,7 +8,18 @@ import pickle
 import pandas as pd
 from networkx.algorithms.community.centrality import girvan_newman
 from networkx.algorithms.centrality import betweenness_centrality
+from networkx.algorithms.centrality import closeness_centrality
 import itertools
+from networkx.algorithms.centrality.eigenvector import eigenvector_centrality
+from networkx.algorithms.bipartite.centrality import degree_centrality
+from networkx.algorithms.link_analysis.pagerank_alg import pagerank
+from networkx.algorithms.link_analysis.hits_alg import hits
+from networkx.algorithms.centrality.percolation import percolation_centrality
+from networkx.algorithms.centrality.second_order import second_order_centrality
+from networkx.classes.function import degree
+from _operator import itemgetter
+from networkx.algorithms.centrality.load import edge_load_centrality
+from networkx.algorithms.community.asyn_fluid import asyn_fluidc
 
 
 def printProgressBar (iteration, total, prefix = '', suffix = '',
@@ -27,19 +38,24 @@ def load_dataset(dataset_filename):
                        header=None,
                        names=["id", "class", "text"],
                        index_col=0)
+
+def most_central_edge(G):
+    centrality = edge_load_centrality(G)
+    return max(centrality, key=centrality.get)
     
     
 def find_clusters(word_graph, k):
-    comp = girvan_newman(word_graph)
-    limited = itertools.takewhile(lambda c: len(c) <= k, comp)
-    clusters = None
-    printProgressBar(0, k, prefix = 'Finding clusters',
-                     suffix = 'Complete')
-    for communities in limited:
-        clusters = [c for c in communities]
-        printProgressBar(len(clusters), k, prefix = 'Finding clusters',
-                         suffix = 'Complete')
-    return clusters
+    return asyn_fluidc(G=word_graph, k=k)
+#     comp = girvan_newman(word_graph, most_valuable_edge=most_central_edge)
+#     limited = itertools.takewhile(lambda c: len(c) <= k, comp)
+#     clusters = None
+#     printProgressBar(0, k, prefix = 'Finding clusters',
+#                      suffix = 'Complete')
+#     for communities in limited:
+#         clusters = [c for c in communities]
+#         printProgressBar(len(clusters), k, prefix = 'Finding clusters',
+#                          suffix = 'Complete')
+#     return clusters
     
 
 
@@ -53,12 +69,13 @@ def main(argv = None):
     wg_fn = argv[1] # gexf or pickle file
     ds_fn = argv[2] # dataset file
     k = int(argv[3]) # number of topics
-    centrality_measure = argv[4]    # betweenness, closeness, hits, pagerank, ...
+    twords = int(argv[4])
+    centrality_measure = argv[5]    # betweenness, closeness, hits, pagerank, ...
     
     # Output
-    pwz_fn = argv[5]    # word-topic probabilities file
-    pz_fn = argv[6]     # topic probabilities file
-    pzd_fn = argv[7]    # topic-document probabilities file
+    pwz_fn = argv[6]    # word-topic probabilities file
+    pz_fn = argv[7]     # topic probabilities file
+    pzd_fn = argv[8]    # topic-document probabilities file
     
     # Load word graph
     print("Loading word graph...", end = " ", flush = True)
@@ -100,21 +117,45 @@ def main(argv = None):
     
     # Calculating pwz
     pwz = []
+    cs = []
     num_clusters_proc = 0
     printProgressBar(num_clusters_proc, k, prefix = 'Calculating P(w|z)',
                      suffix = 'Complete')
     for c in clusters:
+        cs.append(list(c).copy())
         # Initialization
         pwc = dict(zip(corpus_vocab, [0.0]*vocab_len))
         # Word importance (betweenness)
         c_graph = word_graph.subgraph(c)
-        nodes = betweenness_centrality(G=c_graph, normalized=False,
-                                       weight='weight')
+        
+        if centrality_measure == 'betweenness':
+            nodes = betweenness_centrality(G=c_graph, normalized=False,
+                                           weight='weight')
+        elif centrality_measure == 'closeness':
+            nodes = closeness_centrality(G=c_graph, distance='distance')
+        elif centrality_measure == 'eigen':
+            nodes = eigenvector_centrality(G=c_graph, max_iter=10000, weight='weight')
+        elif centrality_measure == 'pagerank':
+            nodes = pagerank(G=c_graph)
+        elif centrality_measure == 'hits':
+            nodes = hits(G=c_graph, max_iter=10000)[1]
+        elif centrality_measure == 'secondorder':
+            nodes = second_order_centrality(G=c_graph)
+        elif centrality_measure == 'degree':
+            nodes = degree(G=c_graph, weight='weight')
+            nodes = dict(nodes)
+        
         keys = list(nodes.keys())
         vals = list(nodes.values())
         sum_vals = sum(vals)
         for i in range(len(vals)):
             vals[i] /= sum_vals
+            if centrality_measure == 'secondorder':
+                vals[i]  = 1.0/vals[i]
+        if centrality_measure == 'secondorder':
+            sum_vals = sum(vals)
+            for i in range(len(vals)):
+                vals[i] /= sum_vals
         nodes = dict(zip(keys, vals))
         for n, v in nodes.items():
             pwc[n] = v
@@ -124,7 +165,44 @@ def main(argv = None):
                      suffix = 'Complete')
     
     # Salvar pwz
-
+    pwz_file = open(pwz_fn, 'w')
+    for i in range(k):
+        pwz_file.write("Topic " + str(i) + "th:\n")
+#         words = list(pwz[i].keys())
+#         probs = list(pwz[i].values())
+        for j in range(twords):
+            pwz_file.write("\t" + pwz[i][j][0] + "   " + '{:.6f}'.format(pwz[i][j][1]) + "\n")
+    pwz_file.close()
+    
+    # Salvar pz
+    pz_file = open(pz_fn, 'w')
+    topics_probs = []
+    topics_probs.append(len(cs[0]) / vocab_len)
+    pz_file.write('{:.6f}'.format(topics_probs[0]))
+    for i in range(1, k):
+        topics_probs.append(len(cs[i]) / vocab_len)
+        pz_file.write(", " + '{:.6f}'.format(topics_probs[i]))
+    pz_file.close()
+    
+    # Salvar pzd
+    word_topics = dict()
+    for i in range(k):
+        for w in cs[i]:
+            word_topics[w] = i
+    pzd_file = open(pzd_fn, 'w')
+    for d in corpus:
+        pzd = [0.001] * k
+        for w in d.split():
+            wtopic = word_topics[w]
+            pzd[wtopic] += 1
+        sum_vals = sum(pzd)
+        pzd[0] /= sum_vals
+        pzd_file.write('{:.6f}'.format(pzd[0]))
+        for i in range(1,k):
+            pzd[i] /= sum_vals
+            pzd_file.write(' ' + '{:.6f}'.format(pzd[i]))
+        pzd_file.write("\n")
+    pzd_file.close()
 
 if __name__ == '__main__':
     main()
