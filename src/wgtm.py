@@ -197,7 +197,7 @@ def main(argv = None):
                 wtopic = word_topics[w]
                 pzd[wtopic] += 1
             except:
-                print("Erro: " + w)
+                pass
         sum_vals = sum(pzd)
         pzd[0] /= sum_vals
         pzd_file.write('{:.6f}'.format(pzd[0]))
