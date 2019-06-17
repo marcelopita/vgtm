@@ -2,24 +2,26 @@
 # -*- coding: utf-8 -*-
 
 
-import sys
-import networkx as nx
-import pickle
-import pandas as pd
-from networkx.algorithms.community.centrality import girvan_newman
+from _operator import itemgetter
+import itertools
+from networkx.algorithms.bipartite.centrality import degree_centrality
 from networkx.algorithms.centrality import betweenness_centrality
 from networkx.algorithms.centrality import closeness_centrality
-import itertools
 from networkx.algorithms.centrality.eigenvector import eigenvector_centrality
-from networkx.algorithms.bipartite.centrality import degree_centrality
-from networkx.algorithms.link_analysis.pagerank_alg import pagerank
-from networkx.algorithms.link_analysis.hits_alg import hits
+from networkx.algorithms.centrality.load import edge_load_centrality
 from networkx.algorithms.centrality.percolation import percolation_centrality
 from networkx.algorithms.centrality.second_order import second_order_centrality
-from networkx.classes.function import degree
-from _operator import itemgetter
-from networkx.algorithms.centrality.load import edge_load_centrality
 from networkx.algorithms.community.asyn_fluid import asyn_fluidc
+from networkx.algorithms.community.centrality import girvan_newman
+from networkx.algorithms.link_analysis.hits_alg import hits
+from networkx.algorithms.link_analysis.pagerank_alg import pagerank
+from networkx.classes.function import degree
+import pickle
+import sys
+
+import networkx as nx
+import pandas as pd
+from networkx.algorithms.cluster import clustering
 
 
 def printProgressBar (iteration, total, prefix = '', suffix = '',
@@ -144,6 +146,9 @@ def main(argv = None):
         elif centrality_measure == 'degree':
             nodes = degree(G=c_graph, weight='weight')
             nodes = dict(nodes)
+        elif centrality_measure == 'inverse_cc':    # Inverse of clustering coefficient
+            nodes = clustering(G=c_graph, weight='weight')   # cc
+            nodes = {k: (v+0.0001) for k, v in nodes.items()} # inverse of cc
         
         keys = list(nodes.keys())
         vals = list(nodes.values())
