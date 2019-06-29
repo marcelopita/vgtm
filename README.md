@@ -1,2 +1,2 @@
-# wgtm
-Word Graph Topic Model
+# vgtm
+Vec2Graph Topic Model
