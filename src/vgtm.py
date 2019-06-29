@@ -121,7 +121,7 @@ def main(argv = None):
 
     # Non-negative matrix factorization
     print("NMF of adjacency matrix...", end=" ", flush=True)
-    nmf_model = NMF(n_components=k, init='random', random_state=0)
+    nmf_model = NMF(n_components=k, init='nndsvdar')
     nmf_model.fit_transform(wg_matrix)
     topic_word_affinity = nmf_model.components_ # matrix k x |V|
     print("OK!")
