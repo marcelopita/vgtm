@@ -220,7 +220,10 @@ def main(argv = None):
     for d in corpus:
         pzd = np.array([0.0] * k)
         for w in d.split():
-            pzd += topic_word_affinity[:, keys.index(w)]
+            try:
+                pzd += topic_word_affinity[:, keys.index(w)]
+            except:
+                pass
         sum_vals = sum(pzd)
         pzd[0] /= sum_vals
         pzd_file.write('{:.6f}'.format(pzd[0]))
