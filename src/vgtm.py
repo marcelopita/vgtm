@@ -74,12 +74,12 @@ def main(argv = None):
     ds_fn = argv[2] # dataset file
     k = int(argv[3]) # number of topics
     twords = int(argv[4])
-#    centrality_measure = argv[5]    # betweenness, closeness, hits, pagerank, ...
     
     # Output
     pwz_fn = argv[5]    # word-topic probabilities file
-    pz_fn = argv[6]     # topic probabilities file
-    pzd_fn = argv[7]    # topic-document probabilities file
+    pzw_fn = argv[6]
+    pz_fn = argv[7]     # topic probabilities file
+    pzd_fn = argv[8]    # topic-document probabilities file
     
     # Load word graph
     print("Loading word graph...", end = " ", flush = True)
@@ -105,17 +105,6 @@ def main(argv = None):
         corpus = ds['text'].tolist()
     print("OK!")
     
-    # Sorted vocabulary
-#    print("Extracting vocabulary...", end=" ", flush=True)
-#    corpus_vocab = set()
-#    for doc in corpus:
-#        for word in doc.split():
-#            corpus_vocab.add(word)
-#    corpus_vocab = list(corpus_vocab)
-#    corpus_vocab.sort()
-#    vocab_len = len(corpus_vocab)
-#    print("OK!")
-
     # Adjacency matrix
     wg_matrix = to_numpy_matrix(G=word_graph, nonedge=0.0001)
 
@@ -138,78 +127,39 @@ def main(argv = None):
             vals[j] /= sum_vals
         pwz.append( sorted( dict(zip(keys, vals)).items(), key=lambda kv: kv[1], reverse=True ) )
         printProgressBar(i+1, k, prefix = 'Calculating P(w|z)', suffix = 'Complete')
-    
-    # Find clusters
-#    clusters = find_clusters(word_graph, k)
-    
-    # Calculating pwz
-#    pwz = []
-#    cs = []
-#    num_clusters_proc = 0
-#    printProgressBar(num_clusters_proc, k, prefix = 'Calculating P(w|z)',
-#                     suffix = 'Complete')
-#    for c in clusters:
-#        cs.append(list(c).copy())
-#        # Initialization
-#        pwc = dict(zip(corpus_vocab, [0.0]*vocab_len))
-#        # Word importance (betweenness)
-#        c_graph = word_graph.subgraph(c)
-#        
-#        if centrality_measure == 'betweenness':
-#            nodes = betweenness_centrality(G=c_graph, normalized=False,
-#                                           weight='weight')
-#        elif centrality_measure == 'closeness':
-#            nodes = closeness_centrality(G=c_graph, distance='distance')
-#        elif centrality_measure == 'eigen':
-#            nodes = eigenvector_centrality(G=c_graph, max_iter=10000, weight='weight')
-#        elif centrality_measure == 'pagerank':
-#            nodes = pagerank(G=c_graph)
-#        elif centrality_measure == 'hits':
-#            nodes = hits(G=c_graph, max_iter=10000)[1]
-#        elif centrality_measure == 'secondorder':
-#            nodes = second_order_centrality(G=c_graph)
-#        elif centrality_measure == 'degree':
-#            nodes = degree(G=c_graph, weight='weight')
-#            nodes = dict(nodes)
-#        elif centrality_measure == 'inverse_cc':    # Inverse of clustering coefficient
-#            nodes = clustering(G=c_graph, weight='weight')   # cc
-#            nodes = {k: (v+0.0001) for k, v in nodes.items()} # inverse of cc
-#        
-#        keys = list(nodes.keys())
-#        vals = list(nodes.values())
-#        sum_vals = sum(vals)
-#        for i in range(len(vals)):
-#            vals[i] /= sum_vals
-#            if centrality_measure == 'secondorder':
-#                vals[i]  = 1.0/vals[i]
-#        if centrality_measure == 'secondorder':
-#            sum_vals = sum(vals)
-#            for i in range(len(vals)):
-#                vals[i] /= sum_vals
-#        nodes = dict(zip(keys, vals))
-#        for n, v in nodes.items():
-#            pwc[n] = v
-#        pwz.append(sorted(pwc.items(), key=lambda kv: kv[1], reverse=True))
-#        num_clusters_proc += 1
-#        printProgressBar(num_clusters_proc, k, prefix = 'Calculating P(w|z)',
-#                     suffix = 'Complete')
-    
+
+    # Calcularing pzw
+    pzw = []
+    printProgressBar(0, vocab_len, prefix = 'Calculating P(z|w)', suffix = 'Complete')
+    for i in range(vocab_len):
+        vals = list(topic_word_affinity[:,i])
+        sum_vals = sum(vals)
+        for j in range(k):
+            vals[j] /= sum_vals
+        pzw.append( vals )
+        printProgressBar(i+1, vocab_len, prefix = 'Calculating P(z|w)', suffix = 'Complete')
+
     # Salvar pwz
     pwz_file = open(pwz_fn, 'w')
     for i in range(k):
         pwz_file.write("Topic " + str(i) + "th:\n")
-#         words = list(pwz[i].keys())
-#         probs = list(pwz[i].values())
         for j in range(twords):
             pwz_file.write("\t" + pwz[i][j][0] + "   " + '{:.6f}'.format(pwz[i][j][1]) + "\n")
     pwz_file.close()
+
+    # Salvar pzw
+    pzw_file = open(pzw_fn, 'w')
+    for i in range(vocab_len):
+        pzw_file.write(keys[i])
+        for j in range(k):
+            pzw_file.write(" " + '{:.6f}'.format(pzw[i][j]))
+        pzw_file.write("\n")
+    pzw_file.close()
     
     # Salvar pz
     pz_file = open(pz_fn, 'w')
     topics_probs = topic_word_affinity.sum(axis=1)
     topics_probs /= topics_probs.sum()
-#    topics_probs = []
-#    topics_probs.append(len(cs[0]) / vocab_len)
     pz_file.write('{:.6f}'.format(topics_probs[0]))
     for i in range(1, k):
         pz_file.write(", " + '{:.6f}'.format(topics_probs[i]))
@@ -233,27 +183,6 @@ def main(argv = None):
         pzd_file.write("\n")
     pzd_file.close()
 
-#    word_topics = dict()
-#    for i in range(k):
-#        for w in cs[i]:
-#            word_topics[w] = i
-#    pzd_file = open(pzd_fn, 'w')
-#    for d in corpus:
-#        pzd = [0.001] * k
-#        for w in d.split():
-#            try:
-#                wtopic = word_topics[w]
-#                pzd[wtopic] += 1
-#            except:
-#                pass
-#        sum_vals = sum(pzd)
-#        pzd[0] /= sum_vals
-#        pzd_file.write('{:.6f}'.format(pzd[0]))
-#        for i in range(1,k):
-#            pzd[i] /= sum_vals
-#            pzd_file.write(' ' + '{:.6f}'.format(pzd[i]))
-#        pzd_file.write("\n")
-#    pzd_file.close()
 
 if __name__ == '__main__':
     main()
